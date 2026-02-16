@@ -1,6 +1,6 @@
 # retrieval/sql_builder.py
 from __future__ import annotations
-
+import re
 from core.config import settings
 
 WARP_COLS = ["WARP_ITEM_DESC1", "WARP_ITEM_DESC2", "WARP_ITEM_DESC3"]
@@ -43,14 +43,26 @@ def build_structured_sql(intent: dict, allow_unlimited: bool):
 
         elif kind == "contains":
             col = f.get("column")
-            val = str(f.get("value"))
-            where.append(f"{norm_text_sql(col)} LIKE '%' || :val{i} || '%'")
-            binds[f"val{i}"] = " ".join(val.split()).lower()
+            raw_val = str(f.get("value"))
+            val = " ".join(raw_val.split()).lower()
+
+            if _is_yarn_token(raw_val):
+                # token/boundary match (avoid matching 18/1 when user asked 8/1)
+                # (^|[^0-9])8/1 oe($|[^0-9a-z]) is a practical boundary rule
+                pattern = rf"(^|[^0-9]){re.escape(val)}($|[^0-9a-z])"
+                where.append(f"REGEXP_LIKE({_norm_expr(col)}, :re{i})")
+                binds[f"re{i}"] = pattern
+            else:
+                where.append(f"{_norm_expr(col)} LIKE '%' || :val{i} || '%'")
+                binds[f"val{i}"] = val
+
 
         elif kind == "equals":
             col = f.get("column")
+            val = " ".join(str(f.get("value")).split()).lower()
             where.append(f"{norm_text_sql(col)} = :eq{i}")
-            binds[f"eq{i}"] = " ".join(str(f.get("value")).split()).lower()
+            binds[f"eq{i}"] = val
+
 
 
         elif kind == "numeric":
@@ -80,3 +92,12 @@ def build_structured_sql(intent: dict, allow_unlimited: bool):
 def norm_text_sql(expr: str) -> str:
     # lower + collapse whitespace + trim
     return f"LOWER(REGEXP_REPLACE(TRIM({expr}), '\\s+', ' '))"
+
+
+def _norm_expr(col: str) -> str:
+    return f"LOWER(REGEXP_REPLACE(TRIM({col}), '\\s+', ' '))"
+
+def _is_yarn_token(val: str) -> bool:
+    # e.g. "8/1 OE", "10/1 RING", "7/1 OESLUB"
+    v = " ".join(val.split())
+    return bool(re.search(r"\b\d+\s*/\s*\d+\b", v))

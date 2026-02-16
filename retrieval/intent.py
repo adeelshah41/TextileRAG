@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import re
 from llm.client import llm
+import re
+
 
 ALLOWED_COLUMNS = [
     "STYLE", "FINISH_TYPE", "OZ", "WEAVE", "QUALITY", "ITEM",
@@ -53,6 +55,7 @@ def _clean_json(raw: str) -> str:
 
 def extract_intent(question: str) -> dict:
     raw = llm.generate(INTENT_SYSTEM, question)
+    
     if not raw or not raw.strip():
         raise ValueError("Intent extraction: empty LLM response.")
     s = _clean_json(raw)
@@ -100,4 +103,23 @@ def normalize_intent(intent: dict) -> dict:
             continue
 
     intent["filters"] = fixed_filters
+    return intent
+
+
+def upgrade_contains_to_equals_for_yarn_count(question: str, intent: dict) -> dict:
+    q = question.lower()
+    if "yarn count of" not in q:
+        return intent
+
+    upgraded = []
+    for f in intent.get("filters", []):
+        if f.get("kind") == "contains":
+            val = str(f.get("value", ""))
+            # yarn token heuristic: has digit/digit pattern
+            if re.search(r"\b\d+\s*/\s*\d+\b", val):
+                f = dict(f)
+                f["kind"] = "equals"
+        upgraded.append(f)
+
+    intent["filters"] = upgraded
     return intent
