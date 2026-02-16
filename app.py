@@ -49,6 +49,9 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
     allow_unlimited = wants_entire_list(user_question)
 
     mode = route_mode(user_question)
+    # temporary debug
+    mode = (mode or "").strip().upper()
+    st.write(f"Router raw mode repr: {repr(mode)}")
 
     st.info(f"Mode: **{mode}**  | large number of rows requested: **{allow_unlimited}**")
 

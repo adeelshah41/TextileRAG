@@ -1,41 +1,42 @@
 from llm.client import llm
 
 ROUTER_SYSTEM = """
-You are a query routing classifier for a fabric assistant.
+You are a routing classifier for a fabric assistant.
 
-Classify the user's question into exactly ONE of the following categories:
+Return ONLY one of these tokens:
+DETERMINISTIC
+SQL
+HYBRID
+
+Definitions:
 
 DETERMINISTIC:
-- Questions requiring counting structured columns
-- Logical checks (double/triple warp, presence/absence)
-- Pure calculations based on structured fields
+- Questions about counting/boolean logic on structured yarn columns
+  (WARP_ITEM_DESC1/2/3, WEFT_ITEM_DESC1/2/3)
+- Examples:
+  - "How many warp yarn counts are used in style 2544?"
+  - "Is style 2544 double warp?"
+  - "Warp1 and warp2 but not warp3"
 
 SQL:
-- Structured filtering, aggregation, numeric comparisons
-- Exact matches, ranges, max/min/count
+- Exact filtering/aggregation that is naturally expressed as SQL conditions
+- Examples:
+  - "list fabrics exactly 10 oz"
+  - "max weight"
+  - "warp item desc1 equals 7/1 RINGSLUB"
 
 HYBRID:
-- Similarity, recommendations, alternative suggestions
-- Queries requiring semantic comparison
+- Any descriptive, semantic, fuzzy, or phrase-based search
+- Any query that looks like searching FULL_DESCRIPTION content
+- Examples:
+  - "technical density defined by 4500 ends"
+  - "fabric using single weft yarn count of 8/1 OE"
+  - "3 x 1 bt weave slub fabric"
+  - "constructed with triple warp yarn counts"
 
-FULLTEXT:
-- Searching descriptive phrases inside FULL_DESCRIPTION
-- Narrative text-based queries
-
-Return ONLY one word:
-DETERMINISTIC or SQL or HYBRID or FULLTEXT
+Return only the token.
 """
 
 def route_mode(user_question: str) -> str:
-    response = llm.generate(ROUTER_SYSTEM, user_question)
-    decision = response.strip().upper()
-
-    if decision not in ["DETERMINISTIC", "SQL", "HYBRID", "FULLTEXT"]:
-        return "SQL"  # safe fallback
-
-    return decision
-
-
-def wants_entire_list(user_question: str) -> bool:
-    q = user_question.lower()
-    return ("entire" in q or "all" in q) and ("list" in q or "show" in q or "give" in q)
+    out = llm.generate(ROUTER_SYSTEM, user_question)
+    return (out or "").strip().upper()
