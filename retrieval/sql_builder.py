@@ -1,10 +1,19 @@
 # retrieval/sql_builder.py
 from __future__ import annotations
+
 import re
 from core.config import settings
 
+# Canonical “slot” columns for yarn descriptions.
+# IMPORTANT: keep these aligned with your Oracle schema.
 WARP_COLS = ["WARP_ITEM_DESC1", "WARP_ITEM_DESC2", "WARP_ITEM_DESC3"]
 WEFT_COLS = ["WEFT_ITEM_DESC1", "WEFT_ITEM2", "WEFT_ITEM3"]
+
+# Optional: central mapping for scalability (future groups can be added here cleanly)
+GROUP_COLS = {
+    "warp": WARP_COLS,
+    "weft": WEFT_COLS,
+}
 
 # Semantic numeric expressions (domain mapping)
 NUMERIC_EXPR = {
@@ -24,50 +33,93 @@ WEFT_ITEM_DESC1, WEFT_ITEM2, WEFT_ITEM3,
 PPI_INCH, FULL_DESCRIPTION
 """.strip().replace("\n", " ")
 
-def _count_expr(cols):
+
+def _count_expr(cols: list[str]) -> str:
+    """
+    Count how many of the given columns are “present”.
+    Oracle treats empty strings as NULL, so TRIM(col) IS NOT NULL is a solid presence test.
+    """
     return " + ".join([f"CASE WHEN TRIM({c}) IS NOT NULL THEN 1 ELSE 0 END" for c in cols])
 
-def build_structured_sql(intent: dict, allow_unlimited: bool):
-    where = []
-    binds = {}
 
-    for i, f in enumerate(intent.get("filters", [])):
+def _norm_expr(expr: str) -> str:
+    return f"LOWER(REGEXP_REPLACE(TRIM({expr}), '\\s+', ' '))"
+
+
+def norm_text_sql(expr: str) -> str:
+    # kept for compatibility with existing imports/usages
+    return _norm_expr(expr)
+
+
+def is_yarn_token(val: str) -> bool:
+    # detects yarn tokens like "8/1 OE", "10/1 RING", "7/1 OESLUB"
+    v = " ".join(str(val).split())
+    return bool(re.search(r"\b\d+\s*/\s*\d+\b", v))
+
+
+def build_structured_sql(intent: dict, allow_unlimited: bool):
+    """
+    Deterministic SQL builder.
+    Scalable approach:
+      - each filter kind compiles independently
+      - no intent mutation, no “special-case rewrites” that delete other binds/filters
+    """
+    where: list[str] = []
+    binds: dict[str, object] = {}
+
+    filters = intent.get("filters", []) or []
+
+    for i, f in enumerate(filters):
         kind = f.get("kind")
 
         if kind == "group_count":
-            group = f.get("group")
-            count = int(f.get("count"))
-            cols = WARP_COLS if group == "warp" else WEFT_COLS
+            group = (f.get("group") or "").lower().strip()
+            if group not in GROUP_COLS:
+                raise ValueError(f"Unsupported group for group_count: {group!r}")
+            try:
+                count = int(f.get("count"))
+            except Exception:
+                raise ValueError(f"Invalid count for group_count: {f.get('count')!r}")
+
+            cols = GROUP_COLS[group]
             where.append(f"({_count_expr(cols)}) = :cnt{i}")
             binds[f"cnt{i}"] = count
 
         elif kind == "contains":
             col = f.get("column")
-            raw_val = str(f.get("value"))
+            if not col:
+                raise ValueError("contains filter missing 'column'")
+            raw_val = str(f.get("value", ""))
             val = " ".join(raw_val.split()).lower()
 
-            if _is_yarn_token(raw_val):
-                # token/boundary match (avoid matching 18/1 when user asked 8/1)
-                # (^|[^0-9])8/1 oe($|[^0-9a-z]) is a practical boundary rule
-                pattern = rf"(^|[^0-9]){re.escape(val)}($|[^0-9a-z])"
+            if is_yarn_token(raw_val):
+                # Exact token match (normalized), not substring
                 where.append(f"REGEXP_LIKE({_norm_expr(col)}, :re{i})")
-                binds[f"re{i}"] = pattern
+                binds[f"re{i}"] = f"^{re.escape(val)}$"
             else:
                 where.append(f"{_norm_expr(col)} LIKE '%' || :val{i} || '%'")
                 binds[f"val{i}"] = val
 
-
         elif kind == "equals":
             col = f.get("column")
-            val = " ".join(str(f.get("value")).split()).lower()
-            where.append(f"{norm_text_sql(col)} = :eq{i}")
-            binds[f"eq{i}"] = val
+            if not col:
+                raise ValueError("equals filter missing 'column'")
+            raw_val = str(f.get("value", ""))
+            val = " ".join(raw_val.split()).lower()
 
-
+            where.append(f"REGEXP_LIKE({_norm_expr(col)}, :re{i})")
+            binds[f"re{i}"] = f"^{re.escape(val)}$"
 
         elif kind == "numeric":
             col = f.get("column")
-            op = f.get("operator", "=")
+            if not col:
+                raise ValueError("numeric filter missing 'column'")
+            op = str(f.get("operator", "=")).strip()
+
+            # Tighten allowed operators to keep this scalable + safe
+            if op not in ("=", "!=", "<>", "<", "<=", ">", ">="):
+                raise ValueError(f"Unsupported numeric operator: {op!r}")
+
             expr = NUMERIC_EXPR.get(col, col)  # if column known numeric-ish -> use expr
             where.append(f"{expr} {op} :num{i}")
             binds[f"num{i}"] = f.get("value")
@@ -88,16 +140,3 @@ def build_structured_sql(intent: dict, allow_unlimited: bool):
         sql += f" FETCH FIRST {settings.hard_max_rows} ROWS ONLY"
 
     return sql, binds
-
-def norm_text_sql(expr: str) -> str:
-    # lower + collapse whitespace + trim
-    return f"LOWER(REGEXP_REPLACE(TRIM({expr}), '\\s+', ' '))"
-
-
-def _norm_expr(col: str) -> str:
-    return f"LOWER(REGEXP_REPLACE(TRIM({col}), '\\s+', ' '))"
-
-def _is_yarn_token(val: str) -> bool:
-    # e.g. "8/1 OE", "10/1 RING", "7/1 OESLUB"
-    v = " ".join(val.split())
-    return bool(re.search(r"\b\d+\s*/\s*\d+\b", v))

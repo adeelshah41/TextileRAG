@@ -4,7 +4,9 @@ from __future__ import annotations
 import json
 from db.oracle import db
 from llm.client import llm
+from retrieval import intent
 from retrieval.sql_builder import build_structured_sql
+import copy
 
 STRUCT_FIX_SYSTEM = """
 You fix intent JSON for a fabric database assistant.
@@ -49,8 +51,7 @@ def run_structured_with_retries(user_question: str, intent: dict, allow_unlimite
     - if empty results and return_all/listy: ask LLM to broaden intent slightly
     """
     last_err = ""
-    cur_intent = intent
-
+    cur_intent = copy.deepcopy(intent)  # <-- prevent accidental mutation
     for attempt in range(retry_limit + 1):
         sql, binds = build_structured_sql(cur_intent, allow_unlimited)
 
