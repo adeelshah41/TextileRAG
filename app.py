@@ -79,13 +79,21 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
         # ----------------------------
         # Answer synthesis layer
         # ----------------------------
+        row_count = int(df.shape[0])
         preview_rows = df.head(30).to_dict(orient="records")
 
         answer_prompt = f"""
-User question: {user_question}
+        User question: {user_question}
 
-Returned rows preview (first up to 30 rows):
-{preview_rows}
+        Total rows returned: {row_count}
+
+        Returned rows preview (first up to 30 rows):
+        {preview_rows}
+
+        Instruction:
+        - When describing how many results there are, use "Total rows returned".
+        - Do NOT infer or guess counts from the preview.
+        - If total rows are large, say the full list is shown below and can be downloaded as CSV.
         """.strip()
 
         final_answer = llm.generate(SYSTEM_ANSWER, answer_prompt)
