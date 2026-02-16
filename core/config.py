@@ -32,5 +32,12 @@ class Settings:
     vector_top_k: int = int(os.getenv("VECTOR_TOP_K", "20"))
     sql_retry_limit: int = int(os.getenv("SQL_RETRY_LIMIT", "5"))
 
+    #hybrid_search
+    hybrid_alpha: float = float(os.getenv("HYBRID_ALPHA", "0.6"))
+    hybrid_k_vector: int = int(os.getenv("HYBRID_K_VECTOR", "50"))
+    hybrid_k_keyword: int = int(os.getenv("HYBRID_K_KEYWORD", "50"))
+    hybrid_k_final: int = int(os.getenv("HYBRID_K_FINAL", "20"))
+
+
 
 settings = Settings()

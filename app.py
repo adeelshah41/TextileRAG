@@ -61,9 +61,13 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
             df, used_sql = run_sql_with_retries(user_question, sql)
 
         elif mode == "HYBRID":
-            df, used_sql, vector_sql, shortlist_df = run_hybrid(
+            df, used_sql, debug_sql, ranked_df = run_hybrid(
                 user_question, allow_unlimited
             )
+            st.code(debug_sql["keyword_sql"], language="sql")
+            st.code(debug_sql["vector_sql"], language="sql")
+            st.dataframe(ranked_df)
+
 
         elif mode == "FULLTEXT":
             df, used_sql = run_fulltext(user_question, allow_unlimited)

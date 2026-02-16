@@ -1,3 +1,13 @@
 old/
 venv/
 .env
+
+
+hybrid_score = (1 — alpha) * sparse_score + alpha * dense_score
+
+hybrid_score is the resulting score after combining hybrid and vector search.
+sparse_score is derived from keyword-based relevance in the hybrid search.
+dense_score is obtained from vector-based relevance.
+alpha controls the balance, with values between 0 and 1:
+alpha = 1 emphasizes vector search (dense relevance).
+alpha = 0 emphasizes keyword search (sparse relevance).
