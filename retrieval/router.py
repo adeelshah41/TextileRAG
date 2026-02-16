@@ -40,3 +40,7 @@ Return only the token.
 def route_mode(user_question: str) -> str:
     out = llm.generate(ROUTER_SYSTEM, user_question)
     return (out or "").strip().upper()
+
+def wants_entire_list(user_question: str) -> bool:
+    q = user_question.lower()
+    return ("entire" in q or "all" in q) and ("list" in q or "show" in q or "give" in q)
