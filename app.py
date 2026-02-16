@@ -95,8 +95,13 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
         - Do NOT infer or guess counts from the preview.
         - If total rows are large, say the full list is shown below and can be downloaded as CSV.
         """.strip()
-
-        final_answer = llm.generate(SYSTEM_ANSWER, answer_prompt)
+        if allow_unlimited and row_count > 50:
+            final_answer = (
+            f"I found {row_count} matching fabrics. "
+            "The full list is displayed below and you can download it as CSV."
+            )
+        else:
+            final_answer = llm.generate(SYSTEM_ANSWER, answer_prompt)
 
         st.subheader("Answer")
         st.write(final_answer)
