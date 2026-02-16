@@ -109,26 +109,7 @@ def build_structured_sql(intent: dict, allow_unlimited: bool):
 
             where.append(f"REGEXP_LIKE({_norm_expr(col)}, :re{i})")
             binds[f"re{i}"] = f"^{re.escape(val)}$"
-        elif kind == "group_match":
-            group = (f.get("group") or "").lower().strip()
-            if group not in GROUP_COLS:
-                raise ValueError(f"Unsupported group for group_match: {group!r}")
-
-            raw_val = str(f.get("value", ""))
-            val = " ".join(raw_val.split()).lower()
-
-            cols = GROUP_COLS[group]
-
-            # exact token match if yarn token, else LIKE
-            if is_yarn_token(raw_val):
-                parts = [f"REGEXP_LIKE({_norm_expr(c)}, :gre{i})" for c in cols]
-                where.append("(" + " OR ".join(parts) + ")")
-                binds[f"gre{i}"] = f"^{re.escape(val)}$"
-            else:
-                parts = [f"{_norm_expr(c)} LIKE '%' || :gval{i} || '%'" for c in cols]
-                where.append("(" + " OR ".join(parts) + ")")
-                binds[f"gval{i}"] = val
-
+        
         elif kind == "numeric":
             col = f.get("column")
             if not col:
@@ -159,51 +140,3 @@ def build_structured_sql(intent: dict, allow_unlimited: bool):
         sql += f" FETCH FIRST {settings.hard_max_rows} ROWS ONLY"
 
     return sql, binds
-
-def promote_group_contains(intent: dict) -> dict:
-    out = dict(intent)
-    filters = out.get("filters", []) or []
-
-    # detect group_count requests
-    weft_count = None
-    warp_count = None
-    for f in filters:
-        if f.get("kind") == "group_count":
-            g = (f.get("group") or "").lower()
-            if g == "weft":
-                weft_count = int(f.get("count", 0) or 0)
-            elif g == "warp":
-                warp_count = int(f.get("count", 0) or 0)
-
-    new_filters = []
-    for f in filters:
-        if f.get("kind") in ("contains", "equals"):
-            col = (f.get("column") or "").upper()
-            v = str(f.get("value", ""))
-
-            # promote weft token filters when multi-weft requested
-            if weft_count and weft_count > 1 and col in ("WEFT_ITEM_DESC1", "WEFT_ITEM2", "WEFT_ITEM3"):
-                if is_yarn_token(v):
-                    new_filters.append({
-                        "kind": "group_match",
-                        "group": "weft",
-                        "match": "token",
-                        "value": v,
-                    })
-                    continue
-
-            # promote warp token filters when multi-warp requested (optional)
-            if warp_count and warp_count > 1 and col in ("WARP_ITEM_DESC1", "WARP_ITEM_DESC2", "WARP_ITEM_DESC3"):
-                if is_yarn_token(v):
-                    new_filters.append({
-                        "kind": "group_match",
-                        "group": "warp",
-                        "match": "token",
-                        "value": v,
-                    })
-                    continue
-
-        new_filters.append(f)
-
-    out["filters"] = new_filters
-    return out

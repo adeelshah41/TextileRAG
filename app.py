@@ -6,7 +6,6 @@ import streamlit as st
 from core.config import settings
 from core.logger import get_logger
 from retrieval.router import wants_entire_list
-from retrieval.sql_builder import promote_group_contains
 from retrieval.intent import extract_intent
 from retrieval.structured_runner import run_structured_with_retries
 from retrieval.hybrid import run_hybrid
@@ -51,7 +50,7 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
         intent = extract_intent(user_question)
         intent = guard_intent(user_question, intent)
         intent = enrich_intent(user_question, intent)
-        intent = promote_group_contains(intent)
+
         intent = guard_intent(user_question, intent)  # re-guard after enrichment
 
    
