@@ -6,11 +6,11 @@ import streamlit as st
 from core.config import settings
 from core.logger import get_logger
 from retrieval.router import wants_entire_list
-
+from retrieval.sql_builder import promote_group_contains
 from retrieval.intent import extract_intent
 from retrieval.structured_runner import run_structured_with_retries
 from retrieval.hybrid import run_hybrid
-from retrieval.intent_guard import guard_intent
+from retrieval.intent_guard import guard_intent,enrich_intent
 
 log = get_logger("app")
 
@@ -50,8 +50,12 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
     try:
         intent = extract_intent(user_question)
         intent = guard_intent(user_question, intent)
+        intent = enrich_intent(user_question, intent)
+        intent = promote_group_contains(intent)
+        intent = guard_intent(user_question, intent)  # re-guard after enrichment
+
+   
         allow_unlimited = wants_entire_list(user_question) or bool(intent.get("return_all"))
-        st.info(f"Large list requested: **{allow_unlimited}**")
 
         if show_debug:
             st.write("**Intent (raw):**")
