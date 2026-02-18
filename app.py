@@ -76,6 +76,8 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
 
         else:
             raise ValueError(f"Unknown intent type: {intent.get('type')}")
+        
+        
 
         # Answer (no LLM for structured lists -> avoids 413)
         row_count = int(df.shape[0])

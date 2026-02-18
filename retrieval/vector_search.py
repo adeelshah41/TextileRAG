@@ -11,7 +11,7 @@ def vector_top_styles(query_vec: list[float], top_k: int):
 
     sql = f"""
     SELECT STYLE,
-           VECTOR_DISTANCE(STYLE_EMBEDDING, TO_VECTOR(:qvec)) AS DIST
+           VECTOR_DISTANCE(EMBEDDING_BGE_M3, TO_VECTOR(:qvec)) AS DIST
     FROM {settings.oracle_table}
     ORDER BY DIST
     FETCH FIRST {int(top_k)} ROWS ONLY
