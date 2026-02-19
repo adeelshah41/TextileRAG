@@ -59,7 +59,7 @@ if st.button("Run", type="primary", use_container_width=True) and q.strip():
         if show_debug:
             st.write("**Intent (raw):**")
             st.json(intent)
-
+        
         # Execute
         if intent.get("type") == "structured":
             df, used_sql, used_intent = run_structured_with_retries(
